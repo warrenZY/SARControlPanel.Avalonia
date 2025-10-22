@@ -1,0 +1,51 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:SARControlPanel.Avalonia.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="300"
+             x:Class="SARControlPanel.Avalonia.Controls.DevicesMessageReceiverControl"
+             x:DataType="vm:MessageReceiverViewModel">
+    
+    <Design.DataContext>
+        <vm:MessageReceiverViewModel/>
+    </Design.DataContext>
+
+    <HeaderedContentControl Header="Data Receiver (RX)" BorderThickness="1" Padding="5">
+        <StackPanel Spacing="10" MaxHeight="600" MaxWidth="600">
+            <!-- Receiver Control Panel -->
+            <Grid ColumnDefinitions="*, Auto, Auto" RowDefinitions="*, Auto" HorizontalAlignment="Stretch">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="Bytes Received:" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding State.BytesReceivedCount}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </StackPanel>
+                
+                <!-- Auto-scroll toggle -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="8,0">
+                    <CheckBox IsChecked="{Binding AutoScrollEnabled}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Auto-scroll" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Clear Button -->
+                <Button Grid.Column="2" Content="Clear" Command="{Binding ClearReceivedDataCommand}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                
+                <!-- HEX Mode Toggle -->
+				<StackPanel Grid.Column="0" Grid.Row="1"  Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Left">
+					<TextBlock Text="Text Mode" VerticalAlignment="Center"/>
+					<ToggleSwitch IsChecked="{Binding State.IsHexMode}" VerticalAlignment="Center"/>
+					<TextBlock Text="HEX Mode" VerticalAlignment="Center"/>
+				</StackPanel>
+            </Grid>
+
+            <!-- Received Data Display Area -->
+            <!-- Name the TextBox so code-behind can manipulate caret for scrolling -->
+            <TextBox Name="ReceivedTextBox"
+                     Text="{Binding ReceivedDataText}" 
+                     IsReadOnly="True" 
+                     AcceptsReturn="True" 
+                     TextWrapping="Wrap"
+                     MinHeight="150" MaxHeight="250" MaxWidth="600"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" />
+        </StackPanel>
+    </HeaderedContentControl>
+</UserControl>

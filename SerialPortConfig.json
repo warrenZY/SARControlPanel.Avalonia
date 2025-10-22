@@ -1,0 +1,12 @@
+{
+  "Profiles": {
+    "Default": {
+      "PortName": "COM254",
+      "BaudRate": 115200,
+      "DataBits": 8,
+      "StopBits": 1,
+      "Parity": 0
+    }
+  },
+  "LastSelectedProfileName": "Default"
+}

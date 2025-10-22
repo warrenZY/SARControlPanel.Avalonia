@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:SARControlPanel.Avalonia.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+        Width="800" Height="600"
+        xmlns:ctrls="using:SARControlPanel.Avalonia.Controls"
+        x:Class="SARControlPanel.Avalonia.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="SARControlPanel.Avalonia">
+
+  <Design.DataContext>
+    <vm:MainWindowViewModel/>
+  </Design.DataContext>
+
+  <!-- Top row can be used for toolbar in future -->
+  <Grid RowDefinitions="Auto, *" ColumnDefinitions="300,5,*" Margin="8">
+    <!-- Left: Configuration (resizable) -->
+    <ctrls:DevicesConfigurationControl
+        Grid.Row="1" Grid.Column="0"
+        Margin="0"
+        HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+        DataContext="{Binding DevicesConfigurationViewModel}"/>
+
+    <!-- Grid splitter to allow user resize -->
+    <GridSplitter Grid.Row="1" Grid.Column="1"
+                  Width="5"
+                  Background="{DynamicResource SystemControlBackgroundTransparentBrush}"
+                  ResizeDirection="Columns"
+                  HorizontalAlignment="Stretch"/>
+
+    <!-- Right: main content + messaging controls -->
+    <Grid Grid.Row="1" Grid.Column="2" RowDefinitions="*,Auto" ColumnDefinitions="*">
+      <!-- Main application content area -->
+      <Border Grid.Row="0" CornerRadius="4" BorderThickness="1" Padding="12"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+              Background="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+        <TextBlock Text="Main Application Content Area"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Opacity="0.5" FontSize="18"/>
+      </Border>
+
+      <!-- Messaging area (receiver above sender) -->
+      <StackPanel Grid.Row="1" Orientation="Vertical" Spacing="8" Margin="0,12,0,0">
+        <!-- Receiver -->
+        <ctrls:DevicesMessageReceiverControl
+            DataContext="{Binding MessageReceiverViewModel}"
+            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+
+        <!-- Sender -->
+        <ctrls:DevicesMessageSenderControl
+            DataContext="{Binding MessageSenderViewModel}"
+            HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="0,6,0,0"/>
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Window>

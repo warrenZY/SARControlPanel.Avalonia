@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="../SARControlPanelxUnitTest/SARControlPanelxUnitTest.csproj" />
+  <Project Path="SARControlPanel.Avalonia.csproj" />
+</Solution>
