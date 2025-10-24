@@ -14,6 +14,8 @@ namespace SARControlPanel.Avalonia.ViewModels
         public MessageSenderViewModel MessageSenderViewModel { get; }
         public MessageReceiverViewModel MessageReceiverViewModel { get; }
 
+        public NotificationViewModel NotificationViewModel { get; } = new NotificationViewModel();
+
         public MainWindowViewModel()
         {
             // Create a single shared state instance so HEX mode and counters are synchronized

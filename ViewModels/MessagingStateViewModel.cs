@@ -11,7 +11,7 @@ namespace SARControlPanel.Avalonia.ViewModels
     public class MessagingStateViewModel : ViewModelBase
     {
         // Shared State Properties
-        private bool _isHexMode = true;
+        private bool _isHexMode = false;
         /// <summary>
         /// Gets or sets a value indicating whether data should be interpreted/sent as HEX bytes.
         /// </summary>

@@ -263,6 +263,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
         ToggleConnectionCommand.ThrownExceptions.Subscribe(ex =>
         {
             ErrorMessage = ex.Message;
+            NotificationService.Instance.AddMessage($"Connection failed: {ex.Message}", NotificationLevel.Error);
             CurrentState = SerialConnectionState.Error;
             _logger.Error(ex, "Connection failed.");
         });
@@ -719,6 +720,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
         if (string.IsNullOrEmpty(ConfigName))
         {
             ErrorMessage = "Profile name cannot be empty.";
+            NotificationService.Instance.AddMessage("Profile name cannot be empty.", NotificationLevel.Warning);
             return;
         }
 
@@ -756,11 +758,13 @@ public class DevicesConfigurationViewModel : ViewModelBase
 
             SaveAllProfilesToDisk();
             ErrorMessage = $"Profile '{profileName}' saved successfully.";
+            NotificationService.Instance.AddMessage($"Profile '{profileName}' saved successfully.", NotificationLevel.Info);
             _logger.Info($"Profile '{profileName}' saved successfully.");
         }
         catch (Exception ex)
         {
             ErrorMessage = $"Failed to save profile: {ex.Message}";
+            NotificationService.Instance.AddMessage($"Failed to save profile: {ex.Message}", NotificationLevel.Error);
             _logger.Info(ex, "Failed to save profile");
         }
     }
@@ -773,6 +777,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
         if (string.IsNullOrEmpty(SelectedPort))
         {
             ErrorMessage = "Invalid port";
+            NotificationService.Instance.AddMessage("No port selected. Cannot connect.", NotificationLevel.Error);
             CurrentState = SerialConnectionState.Error;
             _logger.Error("Connection attempt failed: No port selected.");
             return;
@@ -780,6 +785,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
 
         CurrentState = SerialConnectionState.Connecting;
         ErrorMessage = null;
+        NotificationService.Instance.AddMessage($"Connecting to {SelectedPort} at {SelectedBaudRate} baud...", NotificationLevel.Info);
         _logger.Info($"Connecting to {SelectedPort} at {SelectedBaudRate} baud...");
 
         try
@@ -797,6 +803,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
             SerialPortService.Instance.RegisterSerialPort(_serialPort);
 
             CurrentState = SerialConnectionState.Connected;
+            NotificationService.Instance.AddMessage($"Successfully connected to {SelectedPort}.", NotificationLevel.Info);
             _logger.Info($"Successfully connected to {SelectedPort}.");
             SaveProfile(); // Persist the successful connection settings
         }
@@ -838,6 +845,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
 
                 CurrentState = SerialConnectionState.Disconnected;
                 ErrorMessage = null;
+                NotificationService.Instance.AddMessage("Successfully disconnected.", NotificationLevel.Info);
                 _logger.Info("Successfully disconnected.");
             }
             catch (Exception ex)
