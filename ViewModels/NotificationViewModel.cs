@@ -1,5 +1,6 @@
 ﻿using SARControlPanel.Avalonia.Services;
 using ObservableCollections;
+using ReactiveUI;
 
 namespace SARControlPanel.Avalonia.ViewModels
 {
@@ -9,5 +10,12 @@ namespace SARControlPanel.Avalonia.ViewModels
         /// Exposes the collection view from the NotificationService for the UI to bind to.
         /// </summary>
         public INotifyCollectionChangedSynchronizedViewList<NotificationMessage> MessagesView => NotificationService.Instance.NotificationMessages;
+
+        private bool _autoScrollEnabled = true;
+        public bool AutoScrollEnabled
+        {
+            get => _autoScrollEnabled;
+            set => this.RaiseAndSetIfChanged(ref _autoScrollEnabled, value);
+        }
     }
 }

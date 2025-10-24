@@ -1,10 +1,8 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Markup.Xaml;
 using SARControlPanel.Avalonia.ViewModels;
 using System.Reactive; // for Unit
 using System.Reactive.Threading.Tasks; // for ToTask()
-using System.Threading.Tasks;
 
 namespace SARControlPanel.Avalonia.Controls;
 

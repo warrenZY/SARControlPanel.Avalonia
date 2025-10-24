@@ -28,7 +28,6 @@ public class SerialPortConfig
 public class SerialPortProfiles
 {
     public Dictionary<string, SerialPortConfig> Profiles { get; set; } = new();
-    // renamed per request: default profile name (explicitly set by user)
     public string DefaultProfileName { get; set; } = "Default";
 }
 
@@ -40,23 +39,19 @@ public enum SerialConnectionState
     Error
 }
 
-public class DevicesConfigurationViewModel : ViewModelBase
+public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
 {
     private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
     private const string ConfigFileName = "SerialPortConfig.json";
+    private const string ConfigMutexName = "Global\\SARControlPanel.SerialPortConfig.v1";
 
-    // Named mutex used to serialize cross-process config writes.
-    private const string ConfigMutexName = "SARControlPanel.SerialPortConfig.Mutex.v1";
-
-    // File watcher + debounce timer to pick up external changes
-    private FileSystemWatcher? _watcher;
-    private Timer? _reloadTimer;
+    private IDisposable? _fileWatcherSubscription;
     private readonly object _reloadLock = new();
-
     private SerialPort? _serialPort;
     private Dictionary<string, SerialPortConfig> _allProfiles = new();
+    private bool _isDeleting = false;
 
-    // --- Profile Management Properties ---
+    // Profile management properties
     private string _configName = "Default";
     public string ConfigName
     {
@@ -80,27 +75,20 @@ public class DevicesConfigurationViewModel : ViewModelBase
             if (_selectedProfileName == value) return;
             this.RaiseAndSetIfChanged(ref _selectedProfileName, value);
 
-            // Keep the Save As box in-sync with the chosen profile.
-            // If the selected name corresponds to an existing profile, load its settings.
+            // Load profile settings when selecting an existing profile
             if (!string.IsNullOrWhiteSpace(value) && _allProfiles.ContainsKey(value))
             {
-                // Load profile settings and reflect name into ConfigName
                 LoadProfileSettings(value);
                 ConfigName = value;
             }
-            else
+            else if (!string.IsNullOrWhiteSpace(value))
             {
-                if (!string.IsNullOrWhiteSpace(value))
-                    ConfigName = value;
+                ConfigName = value;
             }
         }
     }
 
-
     private string _defaultProfileName = "Default";
-    /// <summary>
-    /// Name of the profile marked as default by the user.
-    /// </summary>
     public string DefaultProfileName
     {
         get => _defaultProfileName;
@@ -121,6 +109,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectedPort, value);
     }
 
+    // Serial port configuration options
     public ObservableCollection<int> BaudRates { get; } = new ObservableCollection<int>
     {
         9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
@@ -166,6 +155,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectedParity, value);
     }
 
+    // Connection state management
     private bool _isConnected = false;
     public bool IsConnected
     {
@@ -191,7 +181,9 @@ public class DevicesConfigurationViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _errorMessage, value);
     }
 
-    // Commands
+    private int _maxBackups = 5;
+
+    // UI Commands
     public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveProfileCommand { get; }
     public ReactiveCommand<Unit, Unit> DeleteProfileCommand { get; }
@@ -200,7 +192,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
 
     public DevicesConfigurationViewModel()
     {
-        // Commands
+        // Initialize commands
         RefreshCommand = ReactiveCommand.Create(() =>
         {
             LoadPorts();
@@ -217,7 +209,6 @@ public class DevicesConfigurationViewModel : ViewModelBase
                          (sel, cfg) => !string.IsNullOrWhiteSpace(sel) || !string.IsNullOrWhiteSpace(cfg));
         MarkProfileCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            // prefer typed ConfigName, else selected
             var target = !string.IsNullOrWhiteSpace(ConfigName) ? ConfigName.Trim() : SelectedProfileName;
             if (string.IsNullOrWhiteSpace(target))
             {
@@ -225,7 +216,6 @@ public class DevicesConfigurationViewModel : ViewModelBase
                 return;
             }
 
-            // save into memory
             var cfg = new SerialPortConfig
             {
                 PortName = SelectedPort,
@@ -236,7 +226,6 @@ public class DevicesConfigurationViewModel : ViewModelBase
             };
             _allProfiles[target] = cfg;
 
-            // update UI
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (!AvailableProfiles.Contains(target))
@@ -249,8 +238,8 @@ public class DevicesConfigurationViewModel : ViewModelBase
             });
 
             DefaultProfileName = target;
-            // persist merged file
             await Task.Run(() => SaveAllProfilesToDisk());
+            NotificationService.Instance.AddMessage($"Profile '{target}' saved and marked as default.", NotificationLevel.Info);
             _logger.Info($"Profile '{target}' saved and marked as default.");
         }, canMark);
 
@@ -263,48 +252,73 @@ public class DevicesConfigurationViewModel : ViewModelBase
         ToggleConnectionCommand.ThrownExceptions.Subscribe(ex =>
         {
             ErrorMessage = ex.Message;
-            NotificationService.Instance.AddMessage($"Connection failed: {ex.Message}", NotificationLevel.Error);
             CurrentState = SerialConnectionState.Error;
             _logger.Error(ex, "Connection failed.");
         });
 
-        // initialize
+        // Initialize component
         LoadAllProfiles();
         StartWatchingConfigFile();
         LoadPorts();
     }
 
+    /// <summary>
+    /// Gets the configuration file path - uses executable directory for all platforms for easier access
+    /// </summary>
+    private static string GetConfigFilePath()
+    {
+        // Use the executable directory for all platforms for easier access and portability
+        var exeDirectory = AppContext.BaseDirectory;
+        return Path.Combine(exeDirectory, ConfigFileName);
+    }
+
+    /// <summary>
+    /// Starts monitoring the configuration file for external changes
+    /// </summary>
     private void StartWatchingConfigFile()
     {
         try
         {
-            // watch current directory for changes to the config file
-            _watcher = new FileSystemWatcher(Directory.GetCurrentDirectory(), ConfigFileName)
+            var configPath = GetConfigFilePath();
+            var directory = Path.GetDirectoryName(configPath);
+            var fileName = Path.GetFileName(configPath);
+
+            if (string.IsNullOrEmpty(directory)) return;
+
+            var watcher = new FileSystemWatcher(directory, fileName)
             {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+                EnableRaisingEvents = true
             };
 
-            FileSystemEventHandler handler = (s, e) => TriggerReloadFromDisk();
-            RenamedEventHandler renHandler = (s, e) => TriggerReloadFromDisk();
+            // Create observable streams for file system events
+            var changedEvents = Observable.FromEventPattern<FileSystemEventHandler, FileSystemEventArgs>(
+                h => watcher.Changed += h, h => watcher.Changed -= h);
+            var createdEvents = Observable.FromEventPattern<FileSystemEventHandler, FileSystemEventArgs>(
+                h => watcher.Created += h, h => watcher.Created -= h);
+            var deletedEvents = Observable.FromEventPattern<FileSystemEventHandler, FileSystemEventArgs>(
+                h => watcher.Deleted += h, h => watcher.Deleted -= h);
+            var renamedEvents = Observable.FromEventPattern<RenamedEventHandler, RenamedEventArgs>(
+                h => watcher.Renamed += h, h => watcher.Renamed -= h);
 
-            _watcher.Changed += handler;
-            _watcher.Created += handler;
-            _watcher.Deleted += handler;
-            _watcher.Renamed += renHandler;
-            _watcher.EnableRaisingEvents = true;
+            // Merge and debounce file system events to prevent multiple rapid reloads
+            _fileWatcherSubscription = Observable.Merge<object>(
+                    changedEvents, createdEvents, deletedEvents, renamedEvents
+                )
+                .Throttle(TimeSpan.FromMilliseconds(500))
+                .Subscribe(_ =>
+                {
+                    try
+                    {
+                        ReloadProfilesFromDisk();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Error while reloading profiles from disk.");
+                    }
+                });
 
-            // debounce timer (single timer instance): 500ms debounce
-            _reloadTimer = new Timer(_ =>
-            {
-                try
-                {
-                    ReloadProfilesFromDisk();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Warn(ex, "Error while reloading profiles from disk.");
-                }
-            }, null, Timeout.Infinite, Timeout.Infinite);
+            _logger.Info($"Started watching config file: {configPath}");
         }
         catch (Exception ex)
         {
@@ -312,179 +326,257 @@ public class DevicesConfigurationViewModel : ViewModelBase
         }
     }
 
-    private void TriggerReloadFromDisk()
+    /// <summary>
+    /// Loads profiles from the configuration file with validation
+    /// </summary>
+    private SerialPortProfiles? LoadProfilesFromFile()
     {
-        try { _reloadTimer?.Change(500, Timeout.Infinite); } catch { }
+        var configPath = GetConfigFilePath();
+        if (!File.Exists(configPath)) return null;
+
+        try
+        {
+            using var fs = new FileStream(configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var profiles = JsonSerializer.Deserialize<SerialPortProfiles>(fs);
+
+            if (profiles != null)
+            {
+                // Filter out invalid configurations
+                var validProfiles = profiles.Profiles
+                    .Where(kv => ValidateConfig(kv.Value))
+                    .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+                profiles.Profiles = validProfiles;
+            }
+
+            return profiles;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to load profiles from file.");
+            return null;
+        }
     }
 
-    public void LoadPorts()
+    /// <summary>
+    /// Validates serial port configuration parameters
+    /// </summary>
+    private bool ValidateConfig(SerialPortConfig config)
+    {
+        if (config == null) return false;
+
+        // Validate baud rate is in supported list
+        if (!BaudRates.Contains(config.BaudRate))
+        {
+            _logger.Warn($"Unsupported baud rate in config: {config.BaudRate}");
+            return false;
+        }
+
+        // Validate data bits is in supported list
+        if (!DataBitsOptions.Contains(config.DataBits))
+        {
+            _logger.Warn($"Unsupported data bits in config: {config.DataBits}");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Ensures the default profile always exists in the profiles dictionary
+    /// </summary>
+    private void EnsureDefaultProfileExists()
+    {
+        if (!_allProfiles.ContainsKey("Default"))
+        {
+            _allProfiles["Default"] = CreateDefaultConfig();
+        }
+    }
+
+    /// <summary>
+    /// Creates a default serial port configuration
+    /// </summary>
+    private SerialPortConfig CreateDefaultConfig()
+    {
+        return new SerialPortConfig
+        {
+            PortName = null,
+            BaudRate = 115200,
+            DataBits = 8,
+            StopBits = StopBits.One,
+            Parity = Parity.None
+        };
+    }
+
+    /// <summary>
+    /// Creates a backup of the current configuration file and manages old backups
+    /// </summary>
+    private void CreateConfigBackup()
+    {
+        var configPath = GetConfigFilePath();
+        if (!File.Exists(configPath)) return;
+
+        try
+        {
+            var backupDir = Path.Combine(Path.GetDirectoryName(configPath)!, "Backups");
+            Directory.CreateDirectory(backupDir);
+
+            // Create new backup with timestamp
+            var backupPath = Path.Combine(backupDir,
+                $"{Path.GetFileNameWithoutExtension(configPath)}_backup_{DateTime.Now:yyyyMMddHHmmss}{Path.GetExtension(configPath)}");
+
+            File.Copy(configPath, backupPath);
+            _logger.Info($"Configuration backup created: {backupPath}");
+
+            // Clean up old backups, keep only the latest 10
+            CleanupOldBackups(backupDir);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to create configuration backup");
+        }
+    }
+
+    /// <summary>
+    /// Cleans up old backup files, keeping only the most recent ones
+    /// </summary>
+    private void CleanupOldBackups(string backupDir)
     {
         try
         {
-            string[] ports = SerialPort.GetPortNames();
-            var ordered = ports.OrderBy(p => p).ToArray();
+            var backupFiles = Directory.GetFiles(backupDir, "SerialPortConfig_backup_*.json")
+                .Select(file => new FileInfo(file))
+                .OrderByDescending(fi => fi.CreationTime)
+                .ToList();
 
-            if (!AvailablePortsSequenceEqual(ordered))
+            // Keep only the 10 most recent backups
+            if (backupFiles.Count > _maxBackups)
             {
-                string? savedPort = _selectedPort;
-
-                AvailablePorts = new ObservableCollection<string>(ordered);
-
-                if (!string.IsNullOrEmpty(savedPort) && AvailablePorts.Contains(savedPort))
+                foreach (var oldBackup in backupFiles.Skip(_maxBackups))
                 {
-                    SelectedPort = savedPort;
-                    _logger.Info($"Restored saved port: {SelectedPort}");
-                }
-                else if (AvailablePorts.Count > 0)
-                {
-                    SelectedPort = AvailableProfiles.Contains(SelectedProfileName) && _allProfiles.ContainsKey(SelectedProfileName)
-                        ? (_allProfiles[SelectedProfileName].PortName ?? AvailableProfiles.First())
-                        : AvailablePorts.First();
-
-                    _logger.Info($"Selected port: {SelectedPort}");
-                }
-                else
-                {
-                    SelectedPort = null;
-                    _logger.Info("No serial ports found.");
+                    try
+                    {
+                        oldBackup.Delete();
+                        _logger.Info($"Deleted old backup: {oldBackup.Name}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, $"Failed to delete old backup: {oldBackup.Name}");
+                    }
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger.Warn(ex, "Failed to enumerate serial ports.");
+            _logger.Warn(ex, "Failed to clean up old backups");
         }
     }
 
-    private bool AvailablePortsSequenceEqual(string[] ordered)
+    /// <summary>
+    /// Triggers a manual reload of profiles from disk
+    /// </summary>
+    private void TriggerReloadFromDisk()
     {
-        if (_availablePorts == null) return ordered.Length == 0;
-        if (_availablePorts.Count != ordered.Length) return false;
-        for (int i = 0; i < ordered.Length; i++)
-            if (_availablePorts[i] != ordered[i]) return false;
-        return true;
+        try
+        {
+            ReloadProfilesFromDisk();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Error during manual config reload");
+        }
     }
 
-    private bool _isDeleting = false;
-    private string? _recentlyDeletedProfile = null;
-    private readonly object _deleteLock = new();
-
+    /// <summary>
+    /// Reloads profiles from disk when external changes are detected
+    /// </summary>
     private void ReloadProfilesFromDisk()
     {
         lock (_reloadLock)
         {
-            if (_isDeleting)
+            if (_isDeleting) return;
+
+            var profilesWrapper = LoadProfilesFromFile();
+            if (profilesWrapper == null) return;
+
+            bool changed = false;
+            bool currentProfileRemoved = false;
+
+            // Check if current profile was removed externally
+            if (!string.IsNullOrEmpty(SelectedProfileName) &&
+                !profilesWrapper.Profiles.ContainsKey(SelectedProfileName))
             {
-                return;
+                currentProfileRemoved = true;
+                changed = true;
             }
 
-            if (!File.Exists(ConfigFileName)) return;
-
-            try
+            // Update profiles dictionary
+            _allProfiles.Clear();
+            foreach (var kv in profilesWrapper.Profiles)
             {
-                using var fs = new FileStream(ConfigFileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                var profilesWrapper = JsonSerializer.Deserialize<SerialPortProfiles>(fs);
-                if (profilesWrapper == null) return;
+                _allProfiles[kv.Key] = kv.Value;
+                changed = true;
+            }
 
-                bool changed = false;
-                bool currentProfileRemoved = false;
+            // Ensure default profile always exists
+            EnsureDefaultProfileExists();
 
-                // Check if current profile still exists in the loaded profiles
-                if (!string.IsNullOrEmpty(SelectedProfileName) &&
-                    !profilesWrapper.Profiles.ContainsKey(SelectedProfileName))
+            // Update default profile name
+            string defaultProfile = profilesWrapper.DefaultProfileName;
+            if (!string.IsNullOrEmpty(defaultProfile) && _allProfiles.ContainsKey(defaultProfile))
+            {
+                DefaultProfileName = defaultProfile;
+            }
+            else
+            {
+                DefaultProfileName = "Default";
+            }
+
+            if (changed)
+            {
+                Dispatcher.UIThread.Post(() =>
                 {
-                    currentProfileRemoved = true;
-                    changed = true;
-                }
+                    AvailableProfiles = new ObservableCollection<string>(_allProfiles.Keys.OrderBy(n => n));
 
-                // Update profiles dictionary
-                _allProfiles.Clear();
-                foreach (var kv in profilesWrapper.Profiles)
-                {
-                    if (kv.Key != _recentlyDeletedProfile)
+                    // Handle profile selection if current profile was removed
+                    if (currentProfileRemoved || !AvailableProfiles.Contains(SelectedProfileName))
                     {
-                        _allProfiles[kv.Key] = kv.Value;
-                        changed = true;
-                    }
-                }
+                        string newSelection = DetermineFallbackProfile();
+                        SelectedProfileName = newSelection;
+                        ConfigName = newSelection;
+                        LoadProfileSettings(newSelection);
 
-                // Update default profile name if it exists in loaded profiles
-                string defaultProfile = profilesWrapper.DefaultProfileName;
-                if (!string.IsNullOrEmpty(defaultProfile) && _allProfiles.ContainsKey(defaultProfile))
-                {
-                    DefaultProfileName = defaultProfile;
-                }
-                // If default profile doesn't exist or was removed, ensure "Default" exists
-                else if (!_allProfiles.ContainsKey("Default"))
-                {
-                    _allProfiles["Default"] = new SerialPortConfig
-                    {
-                        PortName = null,
-                        BaudRate = 115200,
-                        DataBits = 8,
-                        StopBits = StopBits.One,
-                        Parity = Parity.None
-                    };
-                    DefaultProfileName = "Default";
-                    changed = true;
-                }
-
-                if (changed)
-                {
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        // Update available profiles
-                        AvailableProfiles = new ObservableCollection<string>(_allProfiles.Keys.OrderBy(n => n));
-
-                        // Handle profile selection
-                        if (currentProfileRemoved || !AvailableProfiles.Contains(SelectedProfileName))
+                        if (currentProfileRemoved)
                         {
-                            string newSelection;
-                            // First try to use the configured default profile
-                            if (_allProfiles.ContainsKey(DefaultProfileName))
-                            {
-                                newSelection = DefaultProfileName;
-                            }
-                            // Fall back to "Default" if it exists
-                            else if (_allProfiles.ContainsKey("Default"))
-                            {
-                                newSelection = "Default";
-                                DefaultProfileName = "Default";
-                            }
-                            // Last resort: use first available profile
-                            else if (AvailableProfiles.Count > 0)
-                            {
-                                newSelection = AvailableProfiles.First();
-                            }
-                            else
-                            {
-                                // This should never happen as we ensure "Default" always exists
-                                newSelection = "Default";
-                            }
-
-                            // Update selection and load settings
-                            SelectedProfileName = newSelection;
-                            ConfigName = newSelection;
-                            LoadProfileSettings(newSelection);
-
-                            if (currentProfileRemoved)
-                            {
-                                _logger.Info($"Selected profile was removed externally. Switched to profile: {newSelection}");
-                            }
+                            NotificationService.Instance.AddMessage(
+                                $"Selected profile was removed externally. Switched to '{newSelection}'.",
+                                NotificationLevel.Warning);
+                            _logger.Info($"Selected profile was removed externally. Switched to profile: {newSelection}");
                         }
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Failed to reload config file during filesystem change handling.");
+                    }
+                });
             }
         }
     }
 
+    /// <summary>
+    /// Determines the appropriate fallback profile when current selection is unavailable
+    /// </summary>
+    private string DetermineFallbackProfile()
+    {
+        // Priority order: default profile -> "Default" -> first available -> "Default" as last resort
+        if (_allProfiles.ContainsKey(DefaultProfileName))
+            return DefaultProfileName;
+        else if (_allProfiles.ContainsKey("Default"))
+            return "Default";
+        else if (AvailableProfiles.Count > 0)
+            return AvailableProfiles.First();
+        else
+            return "Default"; // Should never happen due to EnsureDefaultProfileExists
+    }
 
     /// <summary>
-    /// Load a profile settings into the viewmodel fields (port, baud, data bits, stop bits, parity).
+    /// Loads profile settings into the UI controls
     /// </summary>
     private void LoadProfileSettings(string profileName)
     {
@@ -506,7 +598,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
                 SelectedStopBits = cfg.StopBits;
                 SelectedParity = cfg.Parity;
                 ConfigName = profileName;
-
+                ErrorMessage = null; // Clear any previous errors
             }
             else
             {
@@ -522,65 +614,46 @@ public class DevicesConfigurationViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Load all profiles from disk into _allProfiles and update AvailableProfiles/default selection.
+    /// Loads all profiles from disk during initialization
     /// </summary>
     private void LoadAllProfiles()
     {
-        if (File.Exists(ConfigFileName))
+        var profilesWrapper = LoadProfilesFromFile();
+
+        if (profilesWrapper != null && profilesWrapper.Profiles.Count > 0)
         {
-            try
+            foreach (var kv in profilesWrapper.Profiles)
             {
-                using var fs = new FileStream(ConfigFileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                var profilesWrapper = JsonSerializer.Deserialize<SerialPortProfiles>(fs);
-
-                if (profilesWrapper != null && profilesWrapper.Profiles.Count > 0)
-                {
-                    foreach (var kv in profilesWrapper.Profiles)
-                    {
-                        _allProfiles[kv.Key] = kv.Value;
-                    }
-
-                    AvailableProfiles = new ObservableCollection<string>(_allProfiles.Keys.OrderBy(n => n));
-
-                    if (!string.IsNullOrEmpty(profilesWrapper.DefaultProfileName) && _allProfiles.ContainsKey(profilesWrapper.DefaultProfileName))
-                    {
-                        DefaultProfileName = profilesWrapper.DefaultProfileName;
-                        SelectedProfileName = DefaultProfileName;
-                    }
-                    else if (_allProfiles.ContainsKey("Default"))
-                    {
-                        SelectedProfileName = "Default";
-                        DefaultProfileName = "Default";
-                    }
-                    else
-                    {
-                        SelectedProfileName = AvailableProfiles.FirstOrDefault() ?? string.Empty;
-                    }
-                    _logger.Info("All configurations loaded successfully.");
-                    return;
-                }
-                _logger.Info("Configuration file found but was empty or invalid.");
+                _allProfiles[kv.Key] = kv.Value;
             }
-            catch (Exception ex)
+
+            AvailableProfiles = new ObservableCollection<string>(_allProfiles.Keys.OrderBy(n => n));
+
+            // Set default and selected profiles
+            if (!string.IsNullOrEmpty(profilesWrapper.DefaultProfileName) &&
+                _allProfiles.ContainsKey(profilesWrapper.DefaultProfileName))
             {
-                _logger.Error(ex, "Failed to load or deserialize configuration file. Creating default profile.");
+                DefaultProfileName = profilesWrapper.DefaultProfileName;
+                SelectedProfileName = DefaultProfileName;
             }
-        }
-        else
-        {
-            _logger.Info("Configuration file not found. Creating default profile.");
+            else if (_allProfiles.ContainsKey("Default"))
+            {
+                SelectedProfileName = "Default";
+                DefaultProfileName = "Default";
+            }
+            else
+            {
+                SelectedProfileName = AvailableProfiles.FirstOrDefault() ?? string.Empty;
+            }
+
+            _logger.Info("All configurations loaded successfully.");
+            return;
         }
 
-        // initialize default profile
-        _allProfiles["Default"] = new SerialPortConfig
-        {
-            PortName = null,
-            BaudRate = 115200,
-            DataBits = 8,
-            StopBits = StopBits.One,
-            Parity = Parity.None
-        };
+        _logger.Info("Configuration file not found or invalid. Creating default profile.");
 
+        // Initialize with default profile
+        EnsureDefaultProfileExists();
         AvailableProfiles = new ObservableCollection<string> { "Default" };
         SelectedProfileName = "Default";
         ConfigName = "Default";
@@ -589,11 +662,13 @@ public class DevicesConfigurationViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Merge local profiles into disk file using named mutex to avoid clobber by other instances.
+    /// Saves all profiles to disk using mutex for cross-process synchronization
     /// </summary>
     private void SaveAllProfilesToDisk()
     {
-        string tempFile = ConfigFileName + ".tmp";
+        var configPath = GetConfigFilePath();
+        var tempFile = configPath + ".tmp";
+
         var configToSave = new SerialPortProfiles
         {
             Profiles = new Dictionary<string, SerialPortConfig>(_allProfiles),
@@ -602,8 +677,15 @@ public class DevicesConfigurationViewModel : ViewModelBase
 
         bool mutexTaken = false;
         Mutex? mutex = null;
+
         try
         {
+            // Ensure directory exists
+            var directory = Path.GetDirectoryName(configPath);
+            if (!string.IsNullOrEmpty(directory))
+                Directory.CreateDirectory(directory);
+
+            // Use named mutex for cross-process synchronization
             mutex = new Mutex(false, ConfigMutexName);
             try
             {
@@ -614,29 +696,46 @@ public class DevicesConfigurationViewModel : ViewModelBase
                 mutexTaken = true;
             }
 
-            // Serialize and save current configuration directly
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var jsonString = JsonSerializer.Serialize(configToSave, options);
+            if (!mutexTaken)
+            {
+                throw new TimeoutException("Could not acquire configuration mutex within timeout");
+            }
 
-            // Write configuration using temp file
+            // Create backup only if the original file exists
+            if (File.Exists(configPath))
+            {
+                CreateConfigBackup();
+            }
+
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true
+                // Remove PropertyNamingPolicy to maintain original PascalCase format
+            };
+
+            var jsonString = JsonSerializer.Serialize(configToSave, options);
             File.WriteAllText(tempFile, jsonString);
 
-            // Atomic file replacement
-            if (File.Exists(ConfigFileName))
+            // Verify the saved file can be read back correctly
+            try
             {
-                try
-                {
-                    File.Replace(tempFile, ConfigFileName, null);
-                }
-                catch (PlatformNotSupportedException)
-                {
-                    File.Delete(ConfigFileName);
-                    File.Move(tempFile, ConfigFileName);
-                }
+                var verification = JsonSerializer.Deserialize<SerialPortProfiles>(File.ReadAllText(tempFile));
+                if (verification == null)
+                    throw new InvalidDataException("Failed to verify saved configuration");
+            }
+            catch
+            {
+                throw new InvalidDataException("Saved configuration file is corrupted");
+            }
+
+            // Atomic file replacement
+            if (File.Exists(configPath))
+            {
+                File.Replace(tempFile, configPath, null);
             }
             else
             {
-                File.Move(tempFile, ConfigFileName);
+                File.Move(tempFile, configPath);
             }
 
             _logger.Info($"Configuration saved successfully. Profile count: {_allProfiles.Count}");
@@ -644,20 +743,24 @@ public class DevicesConfigurationViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to save configurations to disk.");
-            throw; // Propagate error to caller
+            throw;
         }
         finally
         {
             if (mutexTaken && mutex != null)
             {
-                try { mutex.ReleaseMutex(); } catch { /* ignore */ }
+                try { mutex.ReleaseMutex(); } catch { /* Ignore cleanup errors */ }
             }
             mutex?.Dispose();
-            try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { /* ignore */ }
+
+            // Clean up temporary file
+            try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { /* Ignore cleanup errors */ }
         }
     }
 
-    // DeleteProfile adjusted to update UI selection reliably
+    /// <summary>
+    /// Deletes the currently selected profile
+    /// </summary>
     public void DeleteProfile()
     {
         if (string.IsNullOrWhiteSpace(SelectedProfileName))
@@ -677,6 +780,7 @@ public class DevicesConfigurationViewModel : ViewModelBase
 
         try
         {
+            _isDeleting = true;
             string profileToDelete = SelectedProfileName;
             bool wasDefault = (profileToDelete == DefaultProfileName);
 
@@ -689,14 +793,16 @@ public class DevicesConfigurationViewModel : ViewModelBase
 
                 AvailableProfiles = new ObservableCollection<string>(_allProfiles.Keys.OrderBy(n => n));
 
-                string newSelection = AvailableProfiles.Contains(DefaultProfileName) ? DefaultProfileName :
-                                    (AvailableProfiles.Count > 0 ? AvailableProfiles.First() : "Default");
+                string newSelection = AvailableProfiles.Contains(DefaultProfileName)
+                    ? DefaultProfileName
+                    : (AvailableProfiles.Count > 0 ? AvailableProfiles.First() : "Default");
 
                 SelectedProfileName = newSelection;
                 ConfigName = newSelection;
                 LoadProfileSettings(newSelection);
 
                 SaveAllProfilesToDisk();
+                NotificationService.Instance.AddMessage($"Profile '{profileToDelete}' deleted. Switched to '{newSelection}'.", NotificationLevel.Info);
                 _logger.Info($"Profile '{profileToDelete}' deleted. Switched to profile: {newSelection}");
             }
             else
@@ -710,21 +816,33 @@ public class DevicesConfigurationViewModel : ViewModelBase
             ErrorMessage = $"Failed to delete profile: {ex.Message}";
             _logger.Error(ex, $"Error deleting profile '{SelectedProfileName}'.");
         }
+        finally
+        {
+            _isDeleting = false;
+        }
     }
 
     /// <summary>
-    /// Persist current UI settings into the profile named ConfigName (Save button).
+    /// Saves the current settings as a profile
     /// </summary>
     public void SaveProfile()
     {
-        if (string.IsNullOrEmpty(ConfigName))
+        // Debug logging to understand the issue
+        _logger.Debug($"SaveProfile called - ConfigName: '{ConfigName}', SelectedProfileName: '{SelectedProfileName}'");
+
+        // Use ConfigName if provided and not empty, otherwise use SelectedProfileName
+        var profileName = !string.IsNullOrWhiteSpace(ConfigName) ? ConfigName.Trim() :
+                         !string.IsNullOrWhiteSpace(SelectedProfileName) ? SelectedProfileName : null;
+
+        if (string.IsNullOrWhiteSpace(profileName))
         {
             ErrorMessage = "Profile name cannot be empty.";
-            NotificationService.Instance.AddMessage("Profile name cannot be empty.", NotificationLevel.Warning);
+            _logger.Warn("SaveProfile failed: Profile name is empty");
             return;
         }
 
-        var profileName = ConfigName.Trim();
+        _logger.Debug($"Using profile name: '{profileName}' for saving");
+
         if (profileName == "Default" && !_allProfiles.ContainsKey("Default"))
         {
             ErrorMessage = "Cannot modify the built-in Default profile.";
@@ -757,27 +875,80 @@ public class DevicesConfigurationViewModel : ViewModelBase
             });
 
             SaveAllProfilesToDisk();
-            ErrorMessage = $"Profile '{profileName}' saved successfully.";
+            ErrorMessage = null; // Clear any previous errors
             NotificationService.Instance.AddMessage($"Profile '{profileName}' saved successfully.", NotificationLevel.Info);
             _logger.Info($"Profile '{profileName}' saved successfully.");
         }
         catch (Exception ex)
         {
             ErrorMessage = $"Failed to save profile: {ex.Message}";
-            NotificationService.Instance.AddMessage($"Failed to save profile: {ex.Message}", NotificationLevel.Error);
-            _logger.Info(ex, "Failed to save profile");
+            _logger.Error(ex, $"Failed to save profile '{profileName}'");
         }
     }
 
     /// <summary>
-    /// Connects to the device and applies all serial port settings.
+    /// Refreshes the list of available serial ports
+    /// </summary>
+    public void LoadPorts()
+    {
+        try
+        {
+            string[] ports = SerialPort.GetPortNames();
+            var ordered = ports.OrderBy(p => p).ToArray();
+
+            if (!AvailablePortsSequenceEqual(ordered))
+            {
+                string? savedPort = _selectedPort;
+
+                AvailablePorts = new ObservableCollection<string>(ordered);
+
+                if (!string.IsNullOrEmpty(savedPort) && AvailablePorts.Contains(savedPort))
+                {
+                    SelectedPort = savedPort;
+                    _logger.Info($"Restored saved port: {SelectedPort}");
+                }
+                else if (AvailablePorts.Count > 0)
+                {
+                    // Select port based on current profile or first available
+                    SelectedPort = AvailableProfiles.Contains(SelectedProfileName) && _allProfiles.ContainsKey(SelectedProfileName)
+                        ? (_allProfiles[SelectedProfileName].PortName ?? AvailablePorts.First())
+                        : AvailablePorts.First();
+
+                    _logger.Info($"Selected port: {SelectedPort}");
+                }
+                else
+                {
+                    SelectedPort = null;
+                    _logger.Info("No serial ports found.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to enumerate serial ports.");
+        }
+    }
+
+    /// <summary>
+    /// Compares current available ports with new port list to detect changes
+    /// </summary>
+    private bool AvailablePortsSequenceEqual(string[] ordered)
+    {
+        if (_availablePorts == null) return ordered.Length == 0;
+        if (_availablePorts.Count != ordered.Length) return false;
+        for (int i = 0; i < ordered.Length; i++)
+            if (_availablePorts[i] != ordered[i]) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Establishes connection to the selected serial port
     /// </summary>
     private async Task ConnectDevice()
     {
         if (string.IsNullOrEmpty(SelectedPort))
         {
             ErrorMessage = "Invalid port";
-            NotificationService.Instance.AddMessage("No port selected. Cannot connect.", NotificationLevel.Error);
             CurrentState = SerialConnectionState.Error;
             _logger.Error("Connection attempt failed: No port selected.");
             return;
@@ -805,28 +976,30 @@ public class DevicesConfigurationViewModel : ViewModelBase
             CurrentState = SerialConnectionState.Connected;
             NotificationService.Instance.AddMessage($"Successfully connected to {SelectedPort}.", NotificationLevel.Info);
             _logger.Info($"Successfully connected to {SelectedPort}.");
-            SaveProfile(); // Persist the successful connection settings
-        }
-        finally
-        {
-            if (!IsConnected)
-            {
-                try
-                {
-                    // Ensure the shared service does not keep a reference to a failed port
-                    SerialPortService.Instance.RegisterSerialPort(null);
-                }
-                catch { /* ignore */ }
 
+            // Save current settings as they resulted in successful connection
+            SaveProfile();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Instance.AddMessage($"Failed to connect: {ex.Message}", NotificationLevel.Error);
+            CurrentState = SerialConnectionState.Error;
+            _logger.Error(ex, "Connection failed");
+
+            // Ensure resources are cleaned up on connection failure
+            try
+            {
+                SerialPortService.Instance.RegisterSerialPort(null);
                 _serialPort?.Close();
                 _serialPort?.Dispose();
                 _serialPort = null;
             }
+            catch { /* Ignore cleanup errors */ }
         }
     }
 
     /// <summary>
-    /// Disconnects the device.
+    /// Disconnects from the serial port
     /// </summary>
     private async Task DisconnectDevice()
     {
@@ -860,5 +1033,14 @@ public class DevicesConfigurationViewModel : ViewModelBase
             CurrentState = SerialConnectionState.Disconnected;
             ErrorMessage = null;
         }
+    }
+
+    /// <summary>
+    /// Cleans up resources
+    /// </summary>
+    public void Dispose()
+    {
+        _fileWatcherSubscription?.Dispose();
+        _serialPort?.Dispose();
     }
 }

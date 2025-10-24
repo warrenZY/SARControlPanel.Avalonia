@@ -1,6 +1,5 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
 using ReactiveUI;
 using SARControlPanel.Avalonia.ViewModels;
 using System;
@@ -26,11 +25,6 @@ public partial class DevicesMessageReceiverControl : UserControl
         this.DataContextChanged += (_, _) => AttachSubscriptions();
         // initial attach if DataContext already set (design-time)
         AttachSubscriptions();
-    }
-
-    private void InitializeComponent()
-    {
-        AvaloniaXamlLoader.Load(this);
     }
 
     private void AttachSubscriptions()
