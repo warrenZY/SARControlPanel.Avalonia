@@ -1,161 +1,167 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:local="using:SARControlPanel.Avalonia.Controls"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="using:SARControlPanel.Avalonia.ViewModels"
-             xmlns:converters="using:SARControlPanel.Avalonia.Converters"
-             mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="400"
-             x:Class="SARControlPanel.Avalonia.Controls.DevicesConfigurationControl"
-             x:DataType="vm:DevicesConfigurationViewModel">
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:local="using:SARControlPanel.Avalonia.Controls"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:vm="using:SARControlPanel.Avalonia.ViewModels"
+			 xmlns:converters="using:SARControlPanel.Avalonia.Converters"
+			 mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="400"
+			 x:Class="SARControlPanel.Avalonia.Controls.DevicesConfigurationControl"
+			 x:DataType="vm:DevicesConfigurationViewModel">
 
-    <Design.DataContext>
-        <vm:DevicesConfigurationViewModel/>
-    </Design.DataContext>
+	<Design.DataContext>
+		<vm:DevicesConfigurationViewModel/>
+	</Design.DataContext>
 
-    <UserControl.Styles>
-        <Style Selector="HeaderedContentControl">
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-        
-                        <!-- Header -->
-                        <Border 
-                            ZIndex="1" 
-                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}" 
-                            Padding="5,0,5,0" 
-                            Margin="5,0,0,0">
-                            <TextBlock 
-                                Text="{TemplateBinding Header}" 
-                                FontWeight="Bold"/>
-                        </Border>
-        
-                        <!-- Content Area -->
-                        <Border 
-                            Grid.RowSpan="2" 
-                            Padding="0,5,0,0"
-                            Grid.ColumnSpan="2"
-                            CornerRadius="4"
-                            Margin="0,10,0,0"
-                            BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}"
-                            BorderThickness="1">
-                            <ContentPresenter 
-                                Name="PART_ContentPresenter"
-                                Padding="8"
-                                Content="{TemplateBinding Content}"/>
-                        </Border>
-                    </Grid>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-    </UserControl.Styles>
+	<UserControl.Styles>
+		<Style Selector="HeaderedContentControl">
+			<Setter Property="Template">
+				<ControlTemplate>
+					<Grid>
+						<Grid.RowDefinitions>
+							<RowDefinition Height="Auto"/>
+							<RowDefinition Height="*"/>
+						</Grid.RowDefinitions>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="Auto"/>
+							<ColumnDefinition Width="*"/>
+						</Grid.ColumnDefinitions>
 
-    <HeaderedContentControl Header="Devices Configuration">
-        <StackPanel Spacing="8">
-            <DockPanel>
-                <TextBlock Text="Profile:"  Width="80" VerticalAlignment="Center"/>
-                <ComboBox ItemsSource="{Binding AvailableProfiles}"
-                          SelectedItem="{Binding SelectedProfileName, Mode=TwoWay}"
-                          Margin="10 0 0 0" MinWidth="110" MaxWidth="300"/>
-            </DockPanel>
-            
-            <DockPanel>
-                <TextBlock Text="Save As:"  Width="80" VerticalAlignment="Center"/>
-                <TextBox Text="{Binding ConfigName}" 
-                         Margin="10 0 0 0" MinWidth="110" MaxWidth="300"
-                         Watermark="New config name" HorizontalAlignment="Left"/>
-            </DockPanel>
-            <DockPanel>
-                <Button Content="DELE" Command="{Binding DeleteProfileCommand}"
-                        Margin="90 0 0 0"
-                        ToolTip.Tip="Delete the selected profile"/>
-                <Button Content="SAVE" Command="{Binding SaveProfileCommand}"
-                        Margin="10 0 0 0"
-                        ToolTip.Tip="Save current settings into profile"/>
-                <Button Content="MARK" Command="{Binding MarkProfileCommand}"
-                        Margin="10 0 0 0"
-                        ToolTip.Tip="Mark the currently selected profile as default"/>
-             </DockPanel>
-            <DockPanel>
-                <TextBlock Text="COM Port:"  Width="80" VerticalAlignment="Center"/>
-                <ComboBox ItemsSource="{Binding AvailablePorts}"
-                          SelectedItem="{Binding SelectedPort, Mode=TwoWay}"
-                          MinWidth="110" Margin="10 0 0 0"/>
-                <Button Content="RFSH" Command="{Binding RefreshCommand}"
-                        Margin="10 0 0 0"
-                        ToolTip.Tip="Refresh available COM ports and reload profiles from disk"/>
-            </DockPanel>
-            <DockPanel>
-                <TextBlock Text="Baud Rate:" Width="80" VerticalAlignment="Center"/>
-                <ComboBox ItemsSource="{Binding BaudRates}"
-                          SelectedItem="{Binding SelectedBaudRate, Mode=TwoWay}"
-                          MinWidth="110" Margin="10 0 0 0"
-                          IsEnabled="{Binding !IsConnected}"/>
-            </DockPanel>
+						<!-- Header -->
+						<Border
+						ZIndex="1"
+						Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+						Padding="5,0,5,0"
+						Margin="5,0,0,0">
+							<TextBlock
+							Text="{TemplateBinding Header}"
+							FontWeight="Bold"/>
+						</Border>
 
-            <!-- Data Bits Configuration -->
-            <DockPanel>
-                <TextBlock Text="Data Bits:" Width="80" VerticalAlignment="Center"/>
-                <ComboBox ItemsSource="{Binding DataBitsOptions}"
-                          SelectedItem="{Binding SelectedDataBits, Mode=TwoWay}"
-                          MinWidth="110" Margin="10 0 0 0"
-                          IsEnabled="{Binding !IsConnected}"/>
-            </DockPanel>
+						<!-- Content Area -->
+						<Border
+						Grid.RowSpan="2"
+						Padding="0,5,0,0"
+						Grid.ColumnSpan="2"
+						CornerRadius="4"
+						Margin="0,10,0,0"
+						BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+						BorderThickness="1">
+							<ContentPresenter
+							Name="PART_ContentPresenter"
+							Padding="8"
+							Content="{TemplateBinding Content}"/>
+						</Border>
+					</Grid>
+				</ControlTemplate>
+			</Setter>
+		</Style>
+	</UserControl.Styles>
 
-            <!-- Stop Bits Configuration -->
-            <DockPanel>
-                <TextBlock Text="Stop Bits:" Width="80" VerticalAlignment="Center"/>
-                <ComboBox ItemsSource="{Binding StopBitsOptions}"
-                          SelectedItem="{Binding SelectedStopBits, Mode=TwoWay}"
-                          MinWidth="110" Margin="10 0 0 0"
-                          IsEnabled="{Binding !IsConnected}"/>
-            </DockPanel>
+	<HeaderedContentControl Header="Devices Configuration">
+		<Grid RowSpacing="8"
+			  RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto"
+			  ColumnDefinitions="Auto, *" Margin="0, 8, 0, 0"
+			  MaxHeight="{Binding MaxHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
 
-            <!-- Parity Configuration -->
-            <DockPanel>
-                <TextBlock Text="Parity:" Width="80" VerticalAlignment="Center"/>
-                <ComboBox ItemsSource="{Binding ParityOptions}"
-                          SelectedItem="{Binding SelectedParity, Mode=TwoWay}"
-                          MinWidth="110" Margin="10 0 0 0"
-                          IsEnabled="{Binding !IsConnected}"/>
-            </DockPanel>
-            
-            <DockPanel LastChildFill="True" Margin="0,8,0,0">
-                
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" Spacing="5" VerticalAlignment="Center">
-                    <TextBlock Text="Status:" VerticalAlignment="Center"
-                               MinWidth="80"/>
-                    
-                    <PathIcon Data="M 8,0 A 8,8 0 1,0 8,16 A 8,8 0 1,0 8,0 Z"
-                              Width="16" Height="16" 
-                              VerticalAlignment="Center"
-                              Foreground="{Binding CurrentState, Converter={x:Static converters:ConnectionStateToColorConverter.Instance}}"/>
-                    
-                    <TextBlock VerticalAlignment="Center" 
-                               FontWeight="SemiBold"
-                               Text="{Binding CurrentState}"
-                               MinWidth="90"/>
-                </StackPanel>
+			<!-- Profile Selection -->
+			<TextBlock Grid.Row="0" Grid.Column="0"  Text="Profile:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+			<ComboBox Grid.Row="0" Grid.Column="1"
+					  ItemsSource="{Binding AvailableProfiles}"
+					  SelectedItem="{Binding SelectedProfileName, Mode=TwoWay}"
+					  HorizontalAlignment="Stretch"/>
 
-                <Button Content="{Binding IsConnected, Converter={x:Static converters:BooleanToConnectButtonTextConverter.Instance}}"
-                        Command="{Binding ToggleConnectionCommand}"
-                        Margin="10 0 0 0"
-                        ToolTip.Tip="Connect or disconnect using the selected profile"/>
-            </DockPanel>
-            <TextBlock Foreground="Red" 
-                       IsVisible="{Binding CurrentState, Converter={x:Static converters:ConnectionStateToErrorVisibilityConverter.Instance}}">
-                <Run Text="{Binding ErrorMessage}"/>
-            </TextBlock>
+			<!-- Save As -->
+			<TextBlock Grid.Row="1" Grid.Column="0" Text="Save As:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+			<TextBox Grid.Row="1" Grid.Column="1"
+					 Text="{Binding ConfigName}"
+					 Watermark="New config name"
+					 HorizontalAlignment="Stretch"/>
 
-            </StackPanel>
-    </HeaderedContentControl>
+			<!-- Action Buttons -->
+			<StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
+				<Button Content="DELE" Command="{Binding DeleteProfileCommand}"
+						ToolTip.Tip="Delete the selected profile"/>
+				<Button Content="SAVE" Command="{Binding SaveProfileCommand}"
+						ToolTip.Tip="Save current settings into profile"/>
+				<Button Content="MARK" Command="{Binding MarkProfileCommand}"
+						ToolTip.Tip="Mark the currently selected profile as default"/>
+			</StackPanel>
 
+			<!-- COM Port -->
+			<TextBlock Grid.Row="3" Grid.Column="0" Text="COM Port:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+			<Grid Grid.Row="3" Grid.Column="1"
+				  ColumnDefinitions="*, Auto">
+				<ComboBox Grid.Column="0"
+						  ItemsSource="{Binding AvailablePorts}"
+						  SelectedItem="{Binding SelectedPort, Mode=TwoWay}"
+						  HorizontalAlignment="Stretch"
+						  Margin="0,0,8,0"/>
+				<Button Grid.Column="1"
+						Content="RFSH" Command="{Binding RefreshCommand}"
+						ToolTip.Tip="Refresh available COM ports and reload profiles from disk"/>
+			</Grid>
+
+			<!-- Baud Rate -->
+			<TextBlock Grid.Row="4" Grid.Column="0" Text="Baud Rate:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+			<ComboBox Grid.Row="4" Grid.Column="1"
+					  ItemsSource="{Binding BaudRates}"
+					  SelectedItem="{Binding SelectedBaudRate, Mode=TwoWay}"
+					  HorizontalAlignment="Stretch"
+					  IsEnabled="{Binding !IsConnected}"/>
+
+			<!-- Data Bits Configuration -->
+			<TextBlock Grid.Row="5" Grid.Column="0" Text="Data Bits:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+			<ComboBox Grid.Row="5" Grid.Column="1"
+					  ItemsSource="{Binding DataBitsOptions}"
+					  SelectedItem="{Binding SelectedDataBits, Mode=TwoWay}"
+					  HorizontalAlignment="Stretch"
+					  IsEnabled="{Binding !IsConnected}"/>
+
+			<!-- Stop Bits Configuration -->
+			<TextBlock Grid.Row="6" Grid.Column="0" Text="Stop Bits:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+			<ComboBox Grid.Row="6" Grid.Column="1"
+					  ItemsSource="{Binding StopBitsOptions}"
+					  SelectedItem="{Binding SelectedStopBits, Mode=TwoWay}"
+					  HorizontalAlignment="Stretch"
+					  IsEnabled="{Binding !IsConnected}"/>
+
+			<!-- Parity Configuration -->
+			<TextBlock Grid.Row="7" Grid.Column="0" Text="Parity:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+			<ComboBox Grid.Row="7" Grid.Column="1"
+					  ItemsSource="{Binding ParityOptions}"
+					  SelectedItem="{Binding SelectedParity, Mode=TwoWay}"
+					  HorizontalAlignment="Stretch"
+					  IsEnabled="{Binding !IsConnected}"/>
+
+			<!-- Status and Connection -->
+			<TextBlock Grid.Row="8" Grid.Column="0" Text="Status:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+			<Grid Grid.Row="8" Grid.Column="1"
+				  ColumnDefinitions="Auto, *, Auto"
+				  HorizontalAlignment="Stretch" VerticalAlignment="Center">
+				<PathIcon Grid.Column="0" Margin="0 0 8 0"
+						  Data="M 8,0 A 8,8 0 1,0 8,16 A 8,8 0 1,0 8,0 Z"
+						  Width="16" Height="16"
+						  VerticalAlignment="Center"
+						  Foreground="{Binding CurrentState, Converter={x:Static converters:ConnectionStateToColorConverter.Instance}}"/>
+
+				<TextBlock Grid.Column="1"
+						   VerticalAlignment="Center"
+						   FontWeight="SemiBold"
+						   Text="{Binding CurrentState}"/>
+
+				<Button Grid.Column="2" HorizontalAlignment="Right"
+						Content="{Binding IsConnected, Converter={x:Static converters:BooleanToConnectButtonTextConverter.Instance}}"
+						Command="{Binding ToggleConnectionCommand}"
+						ToolTip.Tip="Connect or disconnect using the selected profile"/>
+			</Grid>
+
+			<!-- Error Message -->
+			<TextBlock Grid.Row="9" Grid.Column="0" Grid.ColumnSpan="2"
+					   Foreground="Red"
+					   IsVisible="{Binding CurrentState, Converter={x:Static converters:ConnectionStateToErrorVisibilityConverter.Instance}}"
+					   Text="{Binding ErrorMessage}"
+					   TextWrapping="Wrap"/>
+		</Grid>
+	</HeaderedContentControl>
 </UserControl>

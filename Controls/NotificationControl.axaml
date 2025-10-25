@@ -8,7 +8,9 @@
 			 x:Class="SARControlPanel.Avalonia.Controls.NotificationControl"
 			 x:DataType="vm:NotificationViewModel">
 
-	<DockPanel Margin="5">
+	<DockPanel Margin="5"
+			   MaxHeight="{Binding MaxHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
+			   MaxWidth="{Binding MaxWidth, RelativeSource={RelativeSource AncestorType=UserControl}}">
 		<!-- Header with title and auto-scroll toggle -->
 		<Border DockPanel.Dock="Top">
 			<Grid>
@@ -31,10 +33,11 @@
 		<ListBox x:Name="NotificationListBox"
 				 ItemsSource="{Binding MessagesView}"
 				 SelectionMode="Single"
-				 BorderThickness="1"
-				 BorderBrush="Gray"
-				 Background="Transparent"
+				 MinHeight="80"
 				 Padding="4"
+				 Background="Transparent"
+				 BorderBrush="Gray"
+				 BorderThickness="1"
 				 CornerRadius="3">
 
 			<ListBox.Styles>

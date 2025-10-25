@@ -12,40 +12,46 @@
 	</Design.DataContext>
 
 	<HeaderedContentControl Header="Data Sender (TX)" BorderThickness="1" Padding="5">
-		<StackPanel Spacing="10" MaxHeight="400" MaxWidth="600">
+		<Grid RowDefinitions="Auto, Auto, *, Auto"
+			  MaxHeight="{Binding MaxHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
+			  MaxWidth="{Binding MaxWidth, RelativeSource={RelativeSource AncestorType=UserControl}}">
 			<!-- Sender Control Panel -->
-			<Grid ColumnDefinitions="*, Auto, Auto" RowDefinitions="*,*"  HorizontalAlignment="Stretch">
+			<Grid Grid.Row="0" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch" Margin="0,0,0,10">
 				<!-- Sent Count -->
-				<StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Left" VerticalAlignment="Center">
+				<StackPanel Grid.Column="0" Grid.Row="0" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
 					<TextBlock Text="Bytes Sent:" VerticalAlignment="Center"/>
 					<TextBlock Text="{Binding State.BytesSentCount}" FontWeight="SemiBold" VerticalAlignment="Center"/>
 				</StackPanel>
 
+				<!-- Send Button -->
+				<Button Grid.Column="1" Grid.Row="0" Content="Send" Command="{Binding SendCommand}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+
 				<!-- HEX Mode Toggle -->
-				<StackPanel Grid.Column="0" Grid.Row="1"  Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Left">
+				<StackPanel Grid.Column="0" Grid.Row="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="0,5,0,0">
 					<TextBlock Text="Text Mode" VerticalAlignment="Center"/>
 					<ToggleSwitch IsChecked="{Binding State.IsHexMode}" VerticalAlignment="Center"/>
 					<TextBlock Text="HEX Mode" VerticalAlignment="Center"/>
 				</StackPanel>
-
-				<Button Grid.Column="1" Content="Send" Command="{Binding SendCommand}" VerticalAlignment="Center"/>
 			</Grid>
 
 			<!-- Sending Input Area -->
-			<TextBox Grid.Row="0" Grid.Column="0"
+			<TextBox Grid.Row="2"
 					 Text="{Binding DataToSend}"
 					 Watermark="Enter data to send (Text or HEX)"
 					 AcceptsReturn="True"
 					 TextWrapping="Wrap"
 					 KeyDown="TextBox_KeyDown"
-					 MinHeight="100" MaxHeight="200"  MaxWidth="600"
-					 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+					 MinHeight="80"
+					 VerticalAlignment="Stretch"
+					 ScrollViewer.VerticalScrollBarVisibility="Auto"
+					 ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
 
 			<!-- Error Message -->
-			<TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+			<TextBlock Grid.Row="3"
 					   Text="{Binding SendErrorMessage}"
 					   Foreground="Red"
-					   IsVisible="{Binding HasSendError}"/>
-		</StackPanel>
+					   IsVisible="{Binding HasSendError}"
+					   TextWrapping="Wrap"/>
+		</Grid>
 	</HeaderedContentControl>
 </UserControl>

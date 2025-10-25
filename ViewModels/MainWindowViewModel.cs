@@ -1,32 +1,36 @@
 ﻿using SARControlPanel.Avalonia.Services;
+using ReactiveUI;
+using System.Reactive;
 
 namespace SARControlPanel.Avalonia.ViewModels
 {
     public class MainWindowViewModel : ViewModelBase
     {
-        // Devices configuration VM already exposed for the left pane
+        // Devices configuration VM exposed
         public DevicesConfigurationViewModel DevicesConfigurationViewModel { get; } = new DevicesConfigurationViewModel();
-
         // Shared messaging state used by both sender and receiver controls
         public MessagingStateViewModel MessagingState { get; }
 
         // Sender / Receiver ViewModels exposed so XAML can bind their DataContexts
         public MessageSenderViewModel MessageSenderViewModel { get; }
         public MessageReceiverViewModel MessageReceiverViewModel { get; }
-
         public NotificationViewModel NotificationViewModel { get; } = new NotificationViewModel();
+
+        // Scaling service singleton for UI scaling
+        public ScalingService ScalingService => ScalingService.Instance;
+        public ReactiveCommand<Unit, Unit> ResetScaleCommand { get; }
 
         public MainWindowViewModel()
         {
-            // Create a single shared state instance so HEX mode and counters are synchronized
             MessagingState = new MessagingStateViewModel();
-
-            // Use the runtime serial service singleton so both VMs observe the same ISerialPortService.
-            // Use SerialPortService.Null for design-time inside those VMs if needed; here we pass the runtime instance.
             var serialService = SerialPortService.Instance;
-
             MessageSenderViewModel = new MessageSenderViewModel(serialService, MessagingState);
             MessageReceiverViewModel = new MessageReceiverViewModel(serialService, MessagingState);
+
+            ResetScaleCommand = ReactiveCommand.Create(() =>
+            {
+                ScalingService.Instance.ScaleFactor = 1.0;
+            });
         }
     }
 }
