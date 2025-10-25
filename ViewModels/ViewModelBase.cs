@@ -1,8 +1,7 @@
-﻿using ReactiveUI;
+using ReactiveUI;
 
-namespace SARControlPanel.Avalonia.ViewModels
+namespace SARControlPanel.Avalonia.ViewModels;
+
+public class ViewModelBase : ReactiveObject
 {
-    public class ViewModelBase : ReactiveObject
-    {
-    }
 }

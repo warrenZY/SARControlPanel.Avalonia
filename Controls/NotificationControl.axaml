@@ -8,26 +8,27 @@
 			 x:Class="SARControlPanel.Avalonia.Controls.NotificationControl"
 			 x:DataType="vm:NotificationViewModel">
 
+	<Design.DataContext>
+		<vm:NotificationViewModel/>
+	</Design.DataContext>
+
 	<DockPanel Margin="5"
 			   MaxHeight="{Binding MaxHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
 			   MaxWidth="{Binding MaxWidth, RelativeSource={RelativeSource AncestorType=UserControl}}">
 		<!-- Header with title and auto-scroll toggle -->
 		<Border DockPanel.Dock="Top">
-			<Grid>
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*"/>
-					<ColumnDefinition Width="Auto"/>
-				</Grid.ColumnDefinitions>
+			<Grid ColumnDefinitions="*,Auto">
 
 				<TextBlock Grid.Column="0"
 						   Text="Notification Center"
 						   FontWeight="Bold"
 						   VerticalAlignment="Center"/>
 
-				<CheckBox Grid.Column="1"
-						  Content="Auto-scroll"
-						  IsChecked="{Binding AutoScrollEnabled}"
-						  VerticalAlignment="Center"/>
+				<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+					<CheckBox IsChecked="{Binding AutoScrollEnabled}" VerticalAlignment="Center"
+							  ToolTip.Tip="Auto scroll to end when enabled"/>
+					<TextBlock Text="Auto-scroll" VerticalAlignment="Center"/>
+				</StackPanel>
 			</Grid>
 		</Border>
 		<ListBox x:Name="NotificationListBox"

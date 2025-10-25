@@ -1,4 +1,4 @@
-﻿using Avalonia.Controls;
+using Avalonia.Controls;
 using Avalonia.Input;
 using SARControlPanel.Avalonia.ViewModels;
 using System.Reactive; // for Unit

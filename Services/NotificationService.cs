@@ -1,4 +1,4 @@
-﻿using Avalonia.Threading;
+using Avalonia.Threading;
 using ObservableCollections; // This is the Cysharp library
 using System;
 

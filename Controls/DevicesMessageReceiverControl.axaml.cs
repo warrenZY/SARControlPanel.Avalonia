@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls;
 using ReactiveUI;
 using SARControlPanel.Avalonia.ViewModels;
@@ -19,7 +19,6 @@ public partial class DevicesMessageReceiverControl : UserControl
     public DevicesMessageReceiverControl()
     {
         InitializeComponent();
-        _receivedTextBox = this.FindControl<TextBox>("ReceivedTextBox");
 
         // react to DataContext changes to (re)attach subscriptions
         this.DataContextChanged += (_, _) => AttachSubscriptions();
@@ -38,11 +37,11 @@ public partial class DevicesMessageReceiverControl : UserControl
                         .ObserveOn(RxApp.MainThreadScheduler)
                         .Subscribe(_ =>
                         {
-                            if (vm.AutoScrollEnabled && _receivedTextBox is not null)
+                            if (vm.AutoScrollEnabled && ReceivedTextBox is not null)
                             {
                                 // set caret to end to cause the TextBox to scroll to the end
-                                var len = _receivedTextBox.Text?.Length ?? 0;
-                                _receivedTextBox.CaretIndex = len;
+                                var len = ReceivedTextBox.Text?.Length ?? 0;
+                                ReceivedTextBox.CaretIndex = len;
                             }
                         });
 
@@ -53,10 +52,10 @@ public partial class DevicesMessageReceiverControl : UserControl
                             .ObserveOn(RxApp.MainThreadScheduler)
                             .Subscribe(enabled =>
                             {
-                                if (enabled && _receivedTextBox is not null)
+                                if (enabled && ReceivedTextBox is not null)
                                 {
-                                    var len = _receivedTextBox.Text?.Length ?? 0;
-                                    _receivedTextBox.CaretIndex = len;
+                                    var len = ReceivedTextBox.Text?.Length ?? 0;
+                                    ReceivedTextBox.CaretIndex = len;
                                 }
                             });
 

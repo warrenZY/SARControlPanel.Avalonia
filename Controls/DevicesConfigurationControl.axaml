@@ -17,15 +17,7 @@
 		<Style Selector="HeaderedContentControl">
 			<Setter Property="Template">
 				<ControlTemplate>
-					<Grid>
-						<Grid.RowDefinitions>
-							<RowDefinition Height="Auto"/>
-							<RowDefinition Height="*"/>
-						</Grid.RowDefinitions>
-						<Grid.ColumnDefinitions>
-							<ColumnDefinition Width="Auto"/>
-							<ColumnDefinition Width="*"/>
-						</Grid.ColumnDefinitions>
+					<Grid RowDefinitions="Auto, *" ColumnDefinitions="Auto,*">
 
 						<!-- Header -->
 						<Border
@@ -145,11 +137,21 @@
 						  VerticalAlignment="Center"
 						  Foreground="{Binding CurrentState, Converter={x:Static converters:ConnectionStateToColorConverter.Instance}}"/>
 
+				<!--Hidden TextBlock to set fixed column width-->
+				<TextBlock Grid.Column="1"
+						   VerticalAlignment="Center"
+						   FontWeight="SemiBold"
+						   Text="Disconnected"
+						   Opacity="0" IsHitTestVisible="False"/>
 				<TextBlock Grid.Column="1"
 						   VerticalAlignment="Center"
 						   FontWeight="SemiBold"
 						   Text="{Binding CurrentState}"/>
 
+				<!--Hidden Button to set fixed column width-->
+				<Button Grid.Column="2" HorizontalAlignment="Right"
+						Content="CONN"
+						Opacity="0" IsHitTestVisible="False"/>
 				<Button Grid.Column="2" HorizontalAlignment="Right"
 						Content="{Binding IsConnected, Converter={x:Static converters:BooleanToConnectButtonTextConverter.Instance}}"
 						Command="{Binding ToggleConnectionCommand}"

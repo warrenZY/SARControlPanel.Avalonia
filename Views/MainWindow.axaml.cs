@@ -1,13 +1,12 @@
 using Avalonia;
 using Avalonia.Controls;
 
-namespace SARControlPanel.Avalonia.Views
+namespace SARControlPanel.Avalonia.Views;
+
+public partial class MainWindow : Window
 {
-    public partial class MainWindow : Window
+    public MainWindow()
     {
-        public MainWindow()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
 }
