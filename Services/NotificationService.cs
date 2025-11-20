@@ -11,12 +11,20 @@ public enum NotificationLevel
     Error
 }
 
+/// <summary>
+/// Represents a notification message with timestamp, level, and content.
+/// </summary>
 public class NotificationMessage
 {
     public DateTime Timestamp { get; } = DateTime.Now;
     public NotificationLevel Level { get; }
     public string Message { get; }
 
+    /// <summary>
+    /// Initializes a new notification message.
+    /// </summary>
+    /// <param name="message">The message text content.</param>
+    /// <param name="level">The notification severity level.</param>
     public NotificationMessage(string message, NotificationLevel level)
     {
         Message = message;
@@ -24,9 +32,14 @@ public class NotificationMessage
     }
 }
 
+/// <summary>
+/// Singleton service for managing application-wide notifications.
+/// Maintains a queue of notifications and enforces a maximum message limit.
+/// </summary>
 public sealed class NotificationService
 {
     private static readonly NotificationService _instance = new();
+    
     public static NotificationService Instance => _instance;
 
     private const int MaxMessages = 100;
@@ -35,13 +48,17 @@ public sealed class NotificationService
 
     public INotifyCollectionChangedSynchronizedViewList<NotificationMessage> NotificationMessages { get; }
 
-    // Constructor to initialize the view
     private NotificationService()
     {
-        // This creates the bindable view from your backing queue
         NotificationMessages = _messageQueue.ToNotifyCollectionChanged(SynchronizationContextCollectionEventDispatcher.Current);
     }
 
+    /// <summary>
+    /// Adds a new notification message to the queue and removes old messages if the limit is exceeded.
+    /// Posts the operation to the UI thread to ensure thread safety.
+    /// </summary>
+    /// <param name="message">The message text content.</param>
+    /// <param name="level">The notification severity level.</param>
     public void AddMessage(string message, NotificationLevel level)
     {
         var notification = new NotificationMessage(message, level);

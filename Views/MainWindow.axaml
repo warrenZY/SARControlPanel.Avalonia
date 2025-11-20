@@ -33,7 +33,7 @@
 					   VerticalAlignment="Center"/>
 			<Slider Minimum="0.75"
 					Maximum="2.5"
-					Width="200"
+					Width="300"
 					VerticalAlignment="Center"
 					Value="{Binding ScalingService.ScaleFactor}"/>
 			<TextBlock MinWidth="40"

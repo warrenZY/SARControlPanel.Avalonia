@@ -1,24 +1,27 @@
 using SARControlPanel.Avalonia.Services;
 using ReactiveUI;
+using System;
 using System.Reactive;
+using System.Reactive.Linq;
+using NLog;
 
 namespace SARControlPanel.Avalonia.ViewModels;
 
-public class MainWindowViewModel : ViewModelBase
+public class MainWindowViewModel : ViewModelBase, IDisposable
 {
-    // Devices configuration VM exposed
-    public DevicesConfigurationViewModel DevicesConfigurationViewModel { get; } = new DevicesConfigurationViewModel();
-    // Shared messaging state used by both sender and receiver controls
-    public MessagingStateViewModel MessagingState { get; }
+    private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
 
-    // Sender / Receiver ViewModels exposed so XAML can bind their DataContexts
+    public DevicesConfigurationViewModel DevicesConfigurationViewModel { get; } = new DevicesConfigurationViewModel();
+    public MessagingStateViewModel MessagingState { get; }
     public MessageSenderViewModel MessageSenderViewModel { get; }
     public MessageReceiverViewModel MessageReceiverViewModel { get; }
     public NotificationViewModel NotificationViewModel { get; } = new NotificationViewModel();
 
-    // Scaling service singleton for UI scaling
     public ScalingService ScalingService => ScalingService.Instance;
+    
     public ReactiveCommand<Unit, Unit> ResetScaleCommand { get; }
+
+    private IDisposable? _commandExceptionSubscription;
 
     public MainWindowViewModel()
     {
@@ -31,5 +34,39 @@ public class MainWindowViewModel : ViewModelBase
         {
             ScalingService.Instance.ScaleFactor = 1.0;
         });
+
+        SubscribeToCommandExceptions();
+    }
+
+    private void SubscribeToCommandExceptions()
+    {
+        try
+        {
+            _commandExceptionSubscription = ResetScaleCommand.ThrownExceptions.Subscribe(ex =>
+            {
+                _logger.Error(ex, "ResetScaleCommand error");
+                try
+                {
+                    NotificationService.Instance.AddMessage($"Scale reset error: {ex.Message}", NotificationLevel.Error);
+                }
+                catch (Exception inner)
+                {
+                    _logger.Warn(inner, "Failed while handling ResetScaleCommand exception.");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to subscribe to command exceptions.");
+        }
+    }
+
+    public void Dispose()
+    {
+        _commandExceptionSubscription?.Dispose();
+        DevicesConfigurationViewModel?.Dispose();
+        MessageSenderViewModel?.Dispose();
+        MessageReceiverViewModel?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

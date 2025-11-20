@@ -238,10 +238,37 @@ public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
             });
 
             DefaultProfileName = target;
-            await Task.Run(() => SaveAllProfilesToDisk());
-            NotificationService.Instance.AddMessage($"Profile '{target}' saved and marked as default.", NotificationLevel.Info);
-            _logger.Info($"Profile '{target}' saved and marked as default.");
+            
+            try
+            {
+                await Task.Run(() => SaveAllProfilesToDisk());
+                NotificationService.Instance.AddMessage($"Profile '{target}' saved and marked as default.", NotificationLevel.Info);
+                _logger.Info($"Profile '{target}' saved and marked as default.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.Error(ex, "Administrator privileges required to save profile.");
+                NotificationService.Instance.AddMessage(
+                    "Administrator privileges required to save configuration. Please run the application as Administrator.",
+                    NotificationLevel.Error);
+                ErrorMessage = "Insufficient permissions. Administrator privileges required.";
+                CurrentState = SerialConnectionState.Error;
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Failed to save profile '{target}'.");
+                NotificationService.Instance.AddMessage($"Failed to save profile: {ex.Message}", NotificationLevel.Error);
+                ErrorMessage = $"Failed to save profile: {ex.Message}";
+                CurrentState = SerialConnectionState.Error;
+                throw;
+            }
         }, canMark);
+
+        MarkProfileCommand.ThrownExceptions.Subscribe(ex =>
+        {
+            _logger.Error(ex, "MarkProfileCommand failed.");
+        });
 
         ToggleConnectionCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -667,8 +694,23 @@ public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
     private void SaveAllProfilesToDisk()
     {
         var configPath = GetConfigFilePath();
-        var tempFile = configPath + ".tmp";
+        var directory = Path.GetDirectoryName(configPath);
 
+        if (string.IsNullOrEmpty(directory))
+        {
+            throw new InvalidOperationException("Invalid config directory path");
+        }
+
+        // Check if we have permissions before attempting to save
+        if (!PermissionService.Instance.EnsurePermissions(directory))
+        {
+            var errorMsg = "Insufficient permissions to save configuration. Administrator privileges may be required.";
+            _logger.Error(errorMsg);
+            ErrorMessage = errorMsg;
+            throw new UnauthorizedAccessException(errorMsg);
+        }
+
+        var tempFile = configPath + ".tmp";
         var configToSave = new SerialPortProfiles
         {
             Profiles = new Dictionary<string, SerialPortConfig>(_allProfiles),
@@ -680,11 +722,6 @@ public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
 
         try
         {
-            // Ensure directory exists
-            var directory = Path.GetDirectoryName(configPath);
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-
             // Use named mutex for cross-process synchronization
             mutex = new Mutex(false, ConfigMutexName);
             try
@@ -710,7 +747,6 @@ public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true
-                // Remove PropertyNamingPolicy to maintain original PascalCase format
             };
 
             var jsonString = JsonSerializer.Serialize(configToSave, options);
@@ -740,9 +776,22 @@ public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
 
             _logger.Info($"Configuration saved successfully. Profile count: {_allProfiles.Count}");
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.Error(ex, "Permission denied when saving configuration.");
+            ErrorMessage = "Permission denied. Administrator privileges may be required.";
+            throw;
+        }
+        catch (IOException ex)
+        {
+            _logger.Error(ex, "IO error when saving configuration.");
+            ErrorMessage = "IO error while saving configuration.";
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to save configurations to disk.");
+            ErrorMessage = $"Failed to save configuration: {ex.Message}";
             throw;
         }
         finally
@@ -811,10 +860,19 @@ public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
                 _logger.Warn($"Failed to delete profile '{profileToDelete}' - not found in dictionary.");
             }
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.Error(ex, "Administrator privileges required to delete profile.");
+            NotificationService.Instance.AddMessage(
+                "Administrator privileges required to save configuration. Please run the application as Administrator.",
+                NotificationLevel.Error);
+            ErrorMessage = "Insufficient permissions. Administrator privileges required.";
+        }
         catch (Exception ex)
         {
             ErrorMessage = $"Failed to delete profile: {ex.Message}";
             _logger.Error(ex, $"Error deleting profile '{SelectedProfileName}'.");
+            NotificationService.Instance.AddMessage($"Failed to delete profile: {ex.Message}", NotificationLevel.Error);
         }
         finally
         {
@@ -827,9 +885,6 @@ public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void SaveProfile()
     {
-        // Debug logging to understand the issue
-        _logger.Debug($"SaveProfile called - ConfigName: '{ConfigName}', SelectedProfileName: '{SelectedProfileName}'");
-
         // Use ConfigName if provided and not empty, otherwise use SelectedProfileName
         var profileName = !string.IsNullOrWhiteSpace(ConfigName) ? ConfigName.Trim() :
                          !string.IsNullOrWhiteSpace(SelectedProfileName) ? SelectedProfileName : null;
@@ -840,8 +895,6 @@ public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
             _logger.Warn("SaveProfile failed: Profile name is empty");
             return;
         }
-
-        _logger.Debug($"Using profile name: '{profileName}' for saving");
 
         if (profileName == "Default" && !_allProfiles.ContainsKey("Default"))
         {
@@ -879,10 +932,19 @@ public class DevicesConfigurationViewModel : ViewModelBase, IDisposable
             NotificationService.Instance.AddMessage($"Profile '{profileName}' saved successfully.", NotificationLevel.Info);
             _logger.Info($"Profile '{profileName}' saved successfully.");
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.Error(ex, "Administrator privileges required to save profile.");
+            NotificationService.Instance.AddMessage(
+                "Administrator privileges required to save configuration. Please run the application as Administrator.",
+                NotificationLevel.Error);
+            ErrorMessage = "Insufficient permissions. Administrator privileges required.";
+        }
         catch (Exception ex)
         {
             ErrorMessage = $"Failed to save profile: {ex.Message}";
             _logger.Error(ex, $"Failed to save profile '{profileName}'");
+            NotificationService.Instance.AddMessage($"Failed to save profile: {ex.Message}", NotificationLevel.Error);
         }
     }
 

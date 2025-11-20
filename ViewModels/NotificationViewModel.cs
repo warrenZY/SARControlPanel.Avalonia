@@ -7,12 +7,10 @@ namespace SARControlPanel.Avalonia.ViewModels;
 
 public class NotificationViewModel : ViewModelBase
 {
-    /// <summary>
-    /// Exposes the collection view from the NotificationService for the UI to bind to.
-    /// </summary>
     public INotifyCollectionChangedSynchronizedViewList<NotificationMessage> MessagesView => NotificationService.Instance.NotificationMessages;
 
     private bool _autoScrollEnabled = true;
+    
     public bool AutoScrollEnabled
     {
         get => _autoScrollEnabled;

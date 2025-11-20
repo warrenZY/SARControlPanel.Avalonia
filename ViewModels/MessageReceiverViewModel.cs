@@ -6,16 +6,15 @@ using System.Reactive;
 using System.Text;
 using Avalonia.Threading;
 using System.Collections.Specialized;
+using NLog;
 
 namespace SARControlPanel.Avalonia.ViewModels;
 
-/// <summary>
-/// ViewModel for receiving data, responsible for display logic and conversion.
-/// Implements IDisposable to ensure event subscriptions are cleaned up.
-/// </summary>
 public class MessageReceiverViewModel : ViewModelBase, IDisposable
 {
+    private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
     private readonly ISerialPortService _serialPortService = null!;
+    
     public MessagingStateViewModel State { get; } = null!;
 
     private string _receivedDataText = string.Empty;
@@ -25,7 +24,6 @@ public class MessageReceiverViewModel : ViewModelBase, IDisposable
         private set => this.RaiseAndSetIfChanged(ref _receivedDataText, value);
     }
 
-    // New: auto-scroll toggle exposed on VM so UI can bind and persist behavior
     private bool _autoScrollEnabled = true;
     public bool AutoScrollEnabled
     {
@@ -35,23 +33,27 @@ public class MessageReceiverViewModel : ViewModelBase, IDisposable
 
     public ReactiveCommand<Unit, Unit> ClearReceivedDataCommand { get; }
 
-    // Track subscription so we can unsubscribe on Dispose
     private NotifyCollectionChangedEventHandler? _sentMessagesHandler;
+    private IDisposable? _commandExceptionSubscription;
 
     public MessageReceiverViewModel()
         : this(SerialPortService.Null, new MessagingStateViewModel())
     {
     }
 
+    /// <summary>
+    /// Initializes the view model with a serial service and shared messaging state.
+    /// Subscribes to data reception and message history events.
+    /// </summary>
+    /// <param name="serialPortService">The serial port service for receiving data.</param>
+    /// <param name="state">The shared messaging state containing HEX mode and counters.</param>
     public MessageReceiverViewModel(ISerialPortService serialPortService, MessagingStateViewModel state)
     {
         _serialPortService = serialPortService ?? SerialPortService.Null;
         State = state ?? new MessagingStateViewModel();
 
-        // Subscribe to incoming data from the serial service
         _serialPortService.DataReceived += OnDataReceived;
 
-        // Observe sent-message history so receiver can also display previously sent items
         _sentMessagesHandler = new NotifyCollectionChangedEventHandler((s, e) =>
         {
             if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems != null)
@@ -60,7 +62,6 @@ public class MessageReceiverViewModel : ViewModelBase, IDisposable
                 {
                     if (item is string text)
                     {
-                        // Append the sent message into ReceivedDataText with a newline
                         Dispatcher.UIThread.Post(() =>
                         {
                             ReceivedDataText += text + Environment.NewLine;
@@ -76,6 +77,31 @@ public class MessageReceiverViewModel : ViewModelBase, IDisposable
         {
             ReceivedDataText = string.Empty;
         });
+
+        SubscribeToCommandExceptions();
+    }
+
+    private void SubscribeToCommandExceptions()
+    {
+        try
+        {
+            _commandExceptionSubscription = ClearReceivedDataCommand.ThrownExceptions.Subscribe(ex =>
+            {
+                _logger.Error(ex, "ClearReceivedDataCommand error");
+                try
+                {
+                    NotificationService.Instance.AddMessage($"Clear error: {ex.Message}", NotificationLevel.Error);
+                }
+                catch (Exception inner)
+                {
+                    _logger.Warn(inner, "Failed while handling ClearReceivedDataCommand exception.");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to subscribe to command exceptions.");
+        }
     }
 
     private void OnDataReceived(byte[] data)
@@ -102,6 +128,8 @@ public class MessageReceiverViewModel : ViewModelBase, IDisposable
 
         if (_sentMessagesHandler != null)
             State.SentMessages.CollectionChanged -= _sentMessagesHandler;
+
+        _commandExceptionSubscription?.Dispose();
 
         GC.SuppressFinalize(this);
     }

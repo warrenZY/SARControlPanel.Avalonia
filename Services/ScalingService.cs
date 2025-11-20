@@ -1,14 +1,16 @@
 using ReactiveUI;
 using System;
 
-namespace SARControlPanel.Avalonia.Services;
+namespace SARControlPanel.Avalonia;
 
 public class ScalingService : ReactiveObject
 {
     private static readonly ScalingService _instance = new ScalingService();
+    
     public static ScalingService Instance => _instance;
 
     private double _scaleFactor = 1.0;
+    
     public double ScaleFactor
     {
         get => _scaleFactor;
@@ -26,6 +28,7 @@ public class ScalingService : ReactiveObject
     }
 
     public double BaseFontSize => 14;
+    
     public double ScaledFontSize => BaseFontSize * ScaleFactor;
 
     public event Action<double>? ScaleChanged;
